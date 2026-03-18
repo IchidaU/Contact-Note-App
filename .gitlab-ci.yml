@@ -1,0 +1,54 @@
+# CI/CDが実行できるかの検証用
+
+stages:
+  - test
+
+simple_test_job:
+  stage: test
+  script:
+    - echo "CI/CD pipeline test successful!"
+
+
+
+# image: node:20
+
+# stages:
+#   - install
+#   - build
+#   - deploy
+
+# cache:
+#   key: ${CI_COMMIT_REF_SLUG}-bun
+#   paths:
+#     - .bun/install/cache
+
+# before_script:
+#   -npm install -g bun
+
+# install_dependencies:
+#   stage: install
+#   script:
+#     - bun install
+#   artifacts:
+#     paths:
+#       - node_modules/
+
+# build_app:
+#   stage: build
+#   script:
+#     - bun run build
+#   artifacts:
+#     paths:
+#       - dist/
+
+# deploy_to_firebase:
+#   stage: deploy
+#   needs:
+#     - build_app
+#   script:
+#     - npm install -g firebase-tools
+#     - firebase deploy --token $FIREBASE_TOKEN --non-interactive --only hosting,functions
+#   environment:
+#     name: production
+#   only:
+#     - main

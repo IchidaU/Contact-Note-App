@@ -1,0 +1,151 @@
+rules_version = '2';service cloud.firestore {match /databases/{database}/documents {// --- Helper Functions (Custom Claims) ---
+function isAuthenticated() {
+  return request.auth != null;
+}
+
+// request.auth.token から直接 role を取得 (コストゼロ)
+function userRole() {
+  return request.auth.token.role;
+}
+// request.auth.token から直接 class_id を取得 (コストゼロ)
+function userClassId() {
+  // ★ 修正: Cloud Functions のキー名 'class' に合わせる
+  return request.auth.token.class; 
+}
+// request.auth.token から直接 grade_id を取得 (コストゼロ)
+function userGradeId() {
+  // ★ 修正: Cloud Functions のキー名 'grade' に合わせる
+  return request.auth.token.grade;
+}
+
+function isUser(userId) {
+  return isAuthenticated() && request.auth.uid == userId;
+}
+function isAdmin() {
+  return isAuthenticated() && userRole() == 99;
+}
+function isStudent() {
+  return isAuthenticated() && userRole() == 1;
+}
+function isTeacher() {
+  return isAuthenticated() && userRole() == 2;
+}
+function isGradeCoordinator() {
+  return isAuthenticated() && userRole() == 3;
+}
+
+// --- Rules for Collections ---
+
+match /roles/{docId} {
+  allow read: if isAuthenticated();
+  allow write: if false; // 管理者もコンソールかAdmin SDKからのみ変更可能
+}
+match /grades/{docId} {
+  allow read: if isAuthenticated();
+  allow write: if false;
+}
+match /classes/{docId} {
+  allow read: if isAuthenticated();
+  
+  // ★★★ 修正 ★★★
+  // 管理者(isAdmin) が 'list' (getDocs) できるように権限を追加
+  allow list: if isAdmin() ||
+                (isTeacher() && (request.query.where.class_id == userClassId())) ||
+                (isGradeCoordinator() && (request.query.where.grade_id == userGradeId()));
+  allow write: if false;
+}
+
+match /users/{userId} {
+  // 読み取り: 管理者 または 本人 のみ
+  // (教師は生徒の /users ドキュメントを読めない。名前は /student_profiles から取得する)
+  allow read: if isAdmin() || isUser(userId);
+  
+  // 一覧取得: 管理者のみ (例: 管理者用ダッシュボードでのユーザー一覧表示)
+  allow list: if isAdmin();
+  
+  // 更新: 本人 のみ (例: 自分の名前やパスワードの変更)
+  allow update: if isUser(userId);
+  
+  // 作成・削除は Cloud Functions (createUser) または Admin SDK のみ
+  allow create, delete: if false; 
+}
+  
+match /student_profiles/{userId} {
+  // 読み取り: 管理者、本人、担当担任、担当学年主任
+  allow read: if isAdmin() || 
+                isUser(userId) ||
+                (isTeacher() && resource.data.class_id == userClassId()) ||
+                (isGradeCoordinator() && resource.data.grade_id == userGradeId());
+
+  // 一覧取得: 管理者、担当担任（自分のクラスのみ）、担当学年主任（自分の学年のみ）
+  allow list: if isAdmin() ||
+                (isTeacher() && 
+                 request.query.where.class_id == userClassId()) ||
+                (isGradeCoordinator() &&
+                 (
+                   // 学年のみで絞り込み
+                   (request.query.where.keys().hasOnly(['grade_id']) &&
+                    request.query.where.grade_id == userGradeId()) ||
+                   // 学年 と is_flagged で絞り込み
+                   (request.query.where.keys().hasOnly(['grade_id', 'is_flagged']) &&
+                    request.query.where.grade_id == userGradeId() &&
+                    request.query.where.is_flagged == true)
+                 )
+                );
+    
+  // 更新: 担当担任（自分のクラスの生徒の 'is_flagged' のみ更新可）
+  allow update: if (isTeacher() && 
+                 (resource.data.class_id == userClassId()) &&
+                 // is_flagged 以外の主要フィールドが変更されていないことを確認
+                 !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['user_id', 'name', 'class_id', 'grade_id', 'status'])));
+
+  allow create, delete: if false; // Cloud Functions からのみ作成
+}
+  
+match /teacher_profiles/{userId} {
+  // 読み取り: 管理者 または 本人
+  allow read: if isAdmin() || isUser(userId);
+  // 更新: 管理者（役割変更など）または 本人（プロフィール変更）
+  allow update: if isAdmin() || isUser(userId);
+  
+  allow list: if isAdmin(); // 管理者のみ一覧取得可
+  allow create, delete: if false; // Cloud Functions からのみ作成
+}
+
+match /records/{recordId} {
+  // 作成: 生徒本人（自分のIDでのみ作成可）
+  allow create: if (isStudent() && request.resource.data.student_profile_id == request.auth.uid);
+  
+  // 読み取り: 管理者、本人、担当担任、担当学年主任
+  allow read: if isAdmin() || 
+                (isStudent() && resource.data.student_profile_id == request.auth.uid) ||
+                (isTeacher() && resource.data.class_id == userClassId()) ||
+                (isGradeCoordinator() && resource.data.grade_id == userGradeId());
+                
+  // 一覧取得: 管理者、本人（自分の記録のみ）、担当担任（自分のクラスのみ）、担当学年主任（自分の学年のみ）
+  allow list: if isAdmin() ||
+                (isStudent() && request.query.where.student_profile_id == request.auth.uid) ||
+                (isTeacher() && request.query.where.class_id == userClassId()) ||
+                (isGradeCoordinator() && request.query.where.grade_id == userGradeId());
+
+  // 更新: 担当担任（自分のクラスの生徒の 'is_read' のみ更新可）
+  allow update: if (isTeacher() && 
+                 // 更新対象ドキュメント(resource)の class_id をチェック
+                 (resource.data.class_id == userClassId()) &&
+                 // is_read 以外の主要フィールドが変更されていないことを確認
+                 !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['target_date', 'physical_score', 'mental_score', 'feedback_text', 'student_profile_id', 'class_id', 'grade_id'])));
+
+  allow delete: if false;
+}
+
+match /teacher_memos/{memoId} {
+  // 読み書き: 管理者、担任、学年主任
+  allow read, list: if isAdmin() || isTeacher() || isGradeCoordinator();
+  
+  // 作成: 担任 または 学年主任（自分のIDでのみ作成可）
+  allow create: if (isTeacher() && request.resource.data.teacher_user_id == request.auth.uid) ||
+                  (isGradeCoordinator() && request.resource.data.teacher_user_id == request.auth.uid);
+
+  allow update, delete: if false;
+}
+}}
