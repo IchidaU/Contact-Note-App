@@ -21,6 +21,15 @@
 
 ## 機能一覧
 
+<style>
+    .features table {
+        table-layout: fixed;
+        width: 100%;
+    }
+</style>
+
+<div class="features">
+
 |ログイン画面|管理画面|
 |:----|:----|
 |![ログイン画面](/doc/img/ScreenShots/Login.png)|![管理画面](/doc/img/ScreenShots/Admin.png)|
@@ -40,6 +49,8 @@
 |:----|:----|
 |![生徒詳細画面2](/doc/img/ScreenShots/StudentLogDetail.png)|![学年主任ダッシュボード](/doc/img/ScreenShots/Coordinator.png)|
 |提出された各記録に対し、担任が生徒には見えないメモを残すことができます。</br>「気になる」フラグが付いている生徒に関しては、副担任も記録閲覧とコメント記入が可能です。|学年主任ダッシュボードからは、担当学年で「気になる」フラグが付いた生徒の一覧と、各生徒の記録詳細・コメント記入が可能です。|
+
+</div>
 
 ## 仕様技術
 
