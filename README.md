@@ -81,11 +81,28 @@
   </tr>
 </table>
 
-## 仕様技術
+## 使用技術
+
+### フロントエンド
 
 |カテゴリー|技術スタック|
 |:----|:----|
-|フロントエンド|TypeScript, React|
+|言語|TypeScript|
+|フレームワーク|React|
+|ルーティング|React Router|
+|ビルドツール|Vite|
+|UIコンポーネント|Chakra UI|
+|フォーム・バリデーション|React Hook Form, Zod|
+|グラフ描画|Recharts|
+
+### バックエンド / インフラ
+
+|カテゴリー|技術スタック|
+|:----|:----|
+|プラットフォーム|Firebase|
+|データベース|FireStore|
+|サーバーレス関数|Firebase Functions|
+|SDK|Firebase JavaScript SDK, Firebase Admin SDK|
 
 ## システム構成
 
